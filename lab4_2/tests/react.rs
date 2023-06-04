@@ -33,7 +33,6 @@ fn compute_cells_calculate_initial_value() {
 }
 
 #[test]
-#[ignore]
 fn compute_cells_take_inputs_in_the_right_order() {
     let mut reactor = Reactor::new();
     let one = reactor.create_input(1);
@@ -47,18 +46,17 @@ fn compute_cells_take_inputs_in_the_right_order() {
 }
 
 #[test]
-#[ignore]
 fn error_creating_compute_cell_if_input_doesnt_exist() {
     let mut dummy_reactor = Reactor::new();
     let input = dummy_reactor.create_input(1);
+    let err = Err(CellId::Input(input));
     assert_eq!(
         Reactor::new().create_compute(&[CellId::Input(input)], |_| 0),
-        Err(CellId::Input(input))
+        err
     );
 }
 
 #[test]
-#[ignore]
 fn do_not_break_cell_if_creating_compute_cell_with_valid_and_invalid_input() {
     let mut dummy_reactor = Reactor::new();
     let _ = dummy_reactor.create_input(1);
@@ -74,7 +72,6 @@ fn do_not_break_cell_if_creating_compute_cell_with_valid_and_invalid_input() {
 }
 
 #[test]
-#[ignore]
 fn compute_cells_update_value_when_dependencies_are_changed() {
     let mut reactor = Reactor::new();
     let input = reactor.create_input(1);
@@ -87,7 +84,6 @@ fn compute_cells_update_value_when_dependencies_are_changed() {
 }
 
 #[test]
-#[ignore]
 fn compute_cells_can_depend_on_other_compute_cells() {
     let mut reactor = Reactor::new();
     let input = reactor.create_input(1);
@@ -158,7 +154,6 @@ impl CallbackRecorder {
 }
 
 #[test]
-#[ignore]
 fn compute_cells_fire_callbacks() {
     let cb = CallbackRecorder::new();
     let mut reactor = Reactor::new();
@@ -167,14 +162,13 @@ fn compute_cells_fire_callbacks() {
         .create_compute(&[CellId::Input(input)], |v| v[0] + 1)
         .unwrap();
     assert!(reactor
-        .add_callback(output, |v| cb.callback_called(v))
+        .add_callback(output,  |v| cb.callback_called(v))
         .is_some());
     assert!(reactor.set_value(input, 3));
     cb.expect_to_have_been_called_with(4);
 }
 
 #[test]
-#[ignore]
 fn error_adding_callback_to_nonexistent_cell() {
     let mut dummy_reactor = Reactor::new();
     let input = dummy_reactor.create_input(1);
@@ -188,7 +182,6 @@ fn error_adding_callback_to_nonexistent_cell() {
 }
 
 #[test]
-#[ignore]
 fn error_removing_callback_from_nonexisting_cell() {
     let mut dummy_reactor = Reactor::new();
     let dummy_input = dummy_reactor.create_input(1);
@@ -212,7 +205,6 @@ fn error_removing_callback_from_nonexisting_cell() {
 }
 
 #[test]
-#[ignore]
 fn callbacks_only_fire_on_change() {
     let cb = CallbackRecorder::new();
     let mut reactor = Reactor::new();
@@ -234,7 +226,6 @@ fn callbacks_only_fire_on_change() {
 }
 
 #[test]
-#[ignore]
 fn callbacks_can_be_called_multiple_times() {
     let cb = CallbackRecorder::new();
     let mut reactor = Reactor::new();
@@ -253,7 +244,6 @@ fn callbacks_can_be_called_multiple_times() {
 }
 
 #[test]
-#[ignore]
 fn callbacks_can_be_called_from_multiple_cells() {
     let cb1 = CallbackRecorder::new();
     let cb2 = CallbackRecorder::new();
@@ -278,7 +268,6 @@ fn callbacks_can_be_called_from_multiple_cells() {
 }
 
 #[test]
-#[ignore]
 fn callbacks_can_be_added_and_removed() {
     let cb1 = CallbackRecorder::new();
     let cb2 = CallbackRecorder::new();
@@ -313,7 +302,6 @@ fn callbacks_can_be_added_and_removed() {
 }
 
 #[test]
-#[ignore]
 fn removing_a_callback_multiple_times_doesnt_interfere_with_other_callbacks() {
     let cb1 = CallbackRecorder::new();
     let cb2 = CallbackRecorder::new();
@@ -344,7 +332,6 @@ fn removing_a_callback_multiple_times_doesnt_interfere_with_other_callbacks() {
 }
 
 #[test]
-#[ignore]
 fn callbacks_should_only_be_called_once_even_if_multiple_dependencies_change() {
     let cb = CallbackRecorder::new();
     let mut reactor = Reactor::new();
@@ -372,7 +359,6 @@ fn callbacks_should_only_be_called_once_even_if_multiple_dependencies_change() {
 }
 
 #[test]
-#[ignore]
 fn callbacks_should_not_be_called_if_dependencies_change_but_output_value_doesnt_change() {
     let cb = CallbackRecorder::new();
     let mut reactor = Reactor::new();
@@ -399,7 +385,7 @@ fn callbacks_should_not_be_called_if_dependencies_change_but_output_value_doesnt
 }
 
 #[test]
-#[ignore]
+
 fn test_adder_with_boolean_values() {
     // This is a digital logic circuit called an adder:
     // https://en.wikipedia.org/wiki/Adder_(electronics)
