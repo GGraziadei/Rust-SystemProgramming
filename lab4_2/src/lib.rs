@@ -244,11 +244,6 @@ impl<'fun_l, 'cb_l, T: Copy + PartialEq > Reactor<'fun_l, 'cb_l, T> {
                         update_queue.push_front(_cell_id);
                     }
 
-                    /*** UpdateValue ***/
-                    self.cells.get_mut(cell_id).expect("Error")
-                        .val = Some(new_val);
-
-
                     let cell_mutable = self.cells.get_mut(cell_id).expect("Error");
                     /*** UpdateValue ***/
                     cell_mutable.val = Some(new_val.clone());
