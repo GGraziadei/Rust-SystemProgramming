@@ -1,0 +1,42 @@
+pub struct Exchanger<T>{
+	v : Mutex<(Option<T>, usize)>,
+	cv : Condvar
+}
+
+impl<T> Exchanger<T>
+where T : Send + Clone
+{
+	pub fn new() -> Arc<Self>{
+		let v = (None,0); //value, role
+		
+		Arc::new( Self{
+			v : Mutex::new(v),
+			cv : Condvar::new()
+		})
+	
+	}
+
+
+	pub fn exchange(&self, t : T) -> Option<T>
+	{
+		let mut v = self.v.lock().ok()?;
+		
+		match (*v).0 {
+			None => {
+				*v = (Some(t),0);
+				v = self.cv.wait_while( v, |v| {
+					v.1 != 1 
+				});
+				
+				return *v.0;
+			},
+			Some(val) => {
+				*v = (Some(t),1);
+				drop(v);
+				self.cv.notify_one();
+				return Some(val);
+			}
+		}
+	
+	}
+}

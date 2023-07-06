@@ -1,0 +1,44 @@
+pub struct Exchanger<T>{
+	channels : Vec< (SyncSender<T>, Receiver<T>) >,
+	channel_id : Mutex<usize>,
+	n : usize
+}
+
+//Accetta n attori, ogni attore riesce a leggere il dato di quello alla sua dx 
+
+impl<T> Echanger<T>
+where T : Send
+{
+
+	pub fn new(n : usize) -> Self{
+		let mut channels = Vec::new();
+		
+		for i in 0..n {
+			channels.push(sync_channel::<T>::(1));
+		}
+		
+		let (tx, rx) = mpsc::channel::<T>::();
+		Self{
+			channels, 
+			channel_id : Mutex::new(0),
+			n
+		}
+	}
+	
+	pub fn exchange(&self, msg : T) -> Result<T, Box<dyn error::Error>
+	{
+		//Assegnazione id del canale
+		let index = self.channel_id.lock()?;
+		let id = *index; //copy
+		*index = ( *index + 1 ) % self.n;
+		drop(index);
+		
+		let client_id = (id+1) % 2;
+		
+		self.channels[id].send(msg)?; //passaggio per movimento
+		
+		if let Some(res) = self.channels[client_id].recv().ok()? {
+			return Ok(res);
+		}
+	}
+}

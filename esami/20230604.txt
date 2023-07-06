@@ -1,0 +1,78 @@
+pub enum Message{
+	WAIT(usize), // usize -> indica l'identificatore del thread 
+	ACK(usize), // usize -> indica la posizione in ordine di arrivo
+	CONTINUE
+}
+
+pub struct RankingBarrier<T>{
+	id : usize, 
+	tx_broadcast : SyncSender<T>,
+	receiver : Receiver<T>
+}
+
+impl<Message> RankingBarrier<Message>{
+
+	fn thread_manager(threads : Vec<SyncSender<T>>, rx_broadcast : Receiver<T>) 
+		-> () 
+	{
+	
+		let n_threads = threads.len();
+		
+		loop{
+			
+			for pos in 1..=n_threads {
+				if let Message::WAIT(id) == rx_broadcast.recv().unwrap(){
+					threads[id].send(Message::ACK(pos)).unwrap();
+				}
+			}
+			
+			for i in 0..n_threads{
+				threads[i].send(Message::CONTINUE).unwrap();
+			}
+		}
+	}
+	
+	
+	pub fn new(n : usize) -> Vec<Self> 
+	{
+		
+		let (tx, rx_broadcast) = sync_channel::<T>::(n);
+		let mut senders = Vec::<SyncSender<T>>::with_capacity(n);
+		let barriers = Vec::<Self>::with_capacity(n);
+		
+		for id in 0..n {
+			let (tx_i, rx_i) = sync_channel::<T>::(1);
+			senders.push(tx_i);
+			barriers.push( Self {
+				id,
+				tx_broadcast : tx.clone(),
+				receiver : rx_i
+			});
+		}
+		
+		std::thread::spawn( move || {
+			thread_manager(senders, rx_broadcast);
+		});
+		
+		barriers 
+	}
+	
+	pub fn wait( &self ) -> Result<usize, Box<dyn error::Error> 
+	{
+		self.tx_broadcast.send(Message::WAIT(self.id)).ok()?;
+		if let Message::ACK(pos) = self.receiver.recv().ok()? {
+			if let Message::CONTINUE = self.receiver.recv().ok()? {
+				return Ok(pos);
+			}
+		}
+	}
+
+}
+
+impl<Message> Drop for RankingBarrier<Message>
+{
+	pub fn drop (&mut self) {
+		drop(self.receiver);
+	}
+}
+

@@ -1,0 +1,57 @@
+trait Message { ... }
+
+pub struct Looper<T>{
+	tx : Sender<T>
+}
+
+impl<T> Looper<T>
+where T : Message
+{
+	fn processor_thread(rx : Receiver<T>, process : P, clean : Q) -> u8 
+	where P : fn(T) -> (), 
+	Q : fn() -> ()
+	{
+		loop{
+			match rx.recv() {
+				Ok(message) => {
+					p(message);
+				}
+				Err(_) {
+					clean();
+					return 0; //chiusura in caso di sconnessione dei senders
+				}
+			}
+		}
+	}
+	
+	pub fn new(process : P, cleanup : C ) -> Self
+		where P : fn(T) -> () ,
+			C : fn() -> ()
+	{
+	
+		let (tx, rx) = channel::<T>::();
+		
+		std::thread::spawn( move || {
+			processor_thread(rx, process, cleanup);
+		});
+		
+		Self {
+			tx
+		}
+	}
+	
+	pub fn send( &self, message : T ) -> Result<(), Box<dyn error::Error>>
+	{
+		self.tx.send(message)
+	}
+}
+
+impl<T> Drop for Looper<T>
+where T : Message 
+{
+	pub fn drop(&mut self) -> () 
+	{
+		drop(self.tx); //Genera un errore sul thread in ascolto
+		println!("Connection closed");
+	}
+}

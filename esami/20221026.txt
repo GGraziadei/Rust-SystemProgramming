@@ -1,0 +1,61 @@
+pub struct Cache<K, V>{
+	results : Mutex<HashMap<K, Option<Arc<V>> >>,
+	cv : Condvar //in una seconda versione inserirei una coda per ogni chiave 
+}
+
+impl<K,V> Cache<K,V>
+where K : Clone + Eq + Hash, V : Send
+{
+	pub fn new() -> Self{
+		Self{
+			results : Mutex::new( HashMap::new() ),
+			cv : Vec::new()
+		}
+	}
+	
+	pub fn get(&self, k : &'static K, f : F) 
+		-> Result<Arc<V>, Box<dyn error::Error>> 
+	where F : fn(&K) -> V + 'static
+	{
+		
+		loop{
+			let mut results = self.results.lock()?;
+			match results.entry(k) {
+			Occupied( entry ) => {
+				match entry {
+					None => {
+						results = self.cv.wait_while( results, |map| {
+							let e = map.entry(k);
+							if let Occupied(Option(a)) = e {
+								return a != None; 
+							}
+							return true;
+						});
+					}
+					Some( res ) =>{ drop(results); return res.clone(); }
+				}
+			
+			}
+			Vacant(entry) => {
+				//Per questa entry inserisco il flag di calcolo in corso
+				entry.insert(None);
+				drop(results);
+				
+				let res : V = f(k);
+				
+				let arc = Arc::new(res);
+				
+				let map = self.results.lock()?;
+				map.insert(k,Some(arc.clone()));
+				drop (map);
+				self.cv.notify_all();
+				
+				return arc;
+			}
+		  }
+		}
+		
+	}
+	
+	}
+}

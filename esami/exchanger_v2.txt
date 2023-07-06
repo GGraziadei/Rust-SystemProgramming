@@ -1,0 +1,44 @@
+pub struct Exchanger<T>{
+	val : Mutex<(Option<T>, usize)>,
+	cv : Condvar
+}
+
+impl<T> Exchanger<T>
+where T : Send 
+{
+	pub fn new() -> Arc<Self>
+	{
+		Arch::new( Self{
+			val : Mutex::new((None, 0)),
+			cv : Condvar::new()
+		})
+	
+	}
+	
+	pub fn exchange(&self , t : T ) -> Result<Option<T>, Box<dyn error::Error>>
+	{
+		let mut val = self.val.lock()?;
+		
+		match *val.0 {
+				Some(v) => {
+					*val = (Some(t), 1); //passaggio per movimento di t, abilita la lettura per il secondo thread
+					drop(val); //thread svegliato attende che possa diventare nuovamente possessore del lock
+					self.cv.notify_one();
+					return Ok(Some(v));
+				}
+				None => {
+					*val = (Some(t), 0); //passaggio per movimento di t
+					val = self.cv.wait_while( val || {
+						val.1 <= 0 })?;
+					
+					if let Some(v) = *val.0 {
+						*val = (None, 0);
+						return Ok(Some(v));
+					}
+				}
+			
+			}
+	
+	}
+
+}

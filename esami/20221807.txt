@@ -1,0 +1,43 @@
+pub struct ExecutionLimiter{
+	n : Mutex<usize>,
+	cv : Condvar,
+	n_max : usize
+}
+
+impl<R> ExecutionLimiter
+where R : Send
+{
+
+	pub fn new(n_max : usize) -> Self {
+		Self{
+			n : Mutex::new(0),
+			cv : Condvar::new(),
+			n_max
+		}
+	}
+	
+	pub fn execute(&self, f : F) -> Result< R, Box<dyn error::Error>>
+	where f : fn() -> R 
+	{
+		let mut lock_in = self.n.lock().ok()?;
+		
+		lock_in = self.cv.wait_while( lock, |lock| {
+			lock >= self.n_max ; //copy del valore n_max 
+		});
+		// SC
+		*lock_in += 1;
+		drop(lock_in);
+		
+		let res = Ok(f());
+		
+		let mut lock_out = self.n.lock().ok()?;
+		// SC
+		*lock_out -= 1;
+		drop(lock_out);
+		
+		self.cv.notify_one(); //Sveglia il primo thread in coda
+		
+		res
+	}
+
+}

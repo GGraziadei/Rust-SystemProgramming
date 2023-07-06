@@ -1,0 +1,53 @@
+trait Work {} 
+
+pub struct Executor<T>{
+	tx : Sender<T>,
+	processor_handle : JoinHandle<usize>
+}
+
+
+impl<T> Executor<T>
+where T : Clone + Work 
+{
+	fn processor(rx : Receiver<T>) -> !{
+		loop{
+			match rx.recv() {
+				Ok(w : T) => {
+					w();
+				}
+				Err(e) => {
+					//canale chiuso 
+					drop(rx);
+					return 0;
+				}
+			}
+		}
+	}
+	
+	pub fn new() -> Arc<Self>{
+	
+		let (tx,rx) = channel::<T>::();
+		
+		//Suppongo che la struttura executor sia comunque accessibile a moltri threads
+		//per ogni threads eseguo una clone di Arc in modo tale da gestire il problema del possesso condiviso
+		Arc::new(Self{
+			tx,
+			processor_handle : std::thread::spawn(move || { processor(rx); });
+		})
+		
+	}
+	
+	pub fn submit(&self, msg : T) -> Result< (), Box<dyn error::Error>>
+	{
+		self.tx.send(msg)?;
+		Ok(())
+	}
+	
+	
+	pub fn shutdown(&self) -> Result<usize,   Box<dyn error::Error>>
+	{
+		drop(self.tx);
+		return self.processor_handle.join()?;
+	}
+	
+}

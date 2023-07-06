@@ -1,0 +1,66 @@
+fn command_thread(tx : Sender<String> ) -> ! {
+	let sleep_time = Duration::from_secs(1);
+	
+	loop{
+		let send_res = tx.send('Messaggio da command_thread');
+		if ( !send_res.is_ok() ) {
+			return -1;
+		}
+		sleep(sleep_time);
+	}
+}
+
+fn process_thread(rx : Receiver<String>, tx : Sender<String>) -> ! {
+	
+	let child = Command::new('cat')
+		.stdout(Stdio::piped())
+		.stdin(Stdio::piped())
+		.spawn();
+	
+	let pipe_w = child.stdin.unwrap();
+	let pipe_r = child.stdout.unwrap();
+	
+	loop{
+		match rx.recv() {
+			Ok(msg) => {
+				let mut buffer : [u8 ; 256] = [0 ; 256];
+				pipe_w.write_all(msg).unwrap();
+				match pipe_r.read_line(&buffer) {
+					Ok(return_msg) => { tx.send(return_msg).unwrap(); }
+					Err(_) => { return -1; } 
+				}
+			}
+			Err(error) => {
+				let child_exit = child.wait_with_output().expect("Error");
+				let last_message = child_exit.stdout;
+				//tx.send(last_message).expect("Wait last message before close pipe");
+				println!(...);
+				drop(rx);
+				return 0;
+			}
+		}
+	}
+}
+
+fn main(){
+
+	let (tx1, rx1) = channel::<String>::();
+	let (tx2, rx2) = channel::<String>::();
+	
+	std::thread::spawn( move || {
+		command_thread(tx1);
+	});
+	
+	std::thread::spawn( move || {
+		process_thread(rx1, tx2);
+	});
+	
+	loop{
+		match rx2.recv() {
+			Ok(msg) => { println!(...) }
+			Err(_) => {
+				drop(rx2); 
+			} 
+		}
+	}
+}

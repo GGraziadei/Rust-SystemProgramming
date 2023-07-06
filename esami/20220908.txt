@@ -1,0 +1,79 @@
+trait Msg : Clone { ... } 
+
+pub struct Subscription<T>{
+	rx : Receiver<T>
+}
+
+impl<T> Subscription<T> 
+where T : Send + Msg
+{
+	pub fn new( rx : Receiver<T> ) -> Self {
+		Self{
+			rx
+		}
+	}
+	
+	pub fn read(&self ) -> Option<T> 
+	{
+		match self.rx.recv().ok() 
+	}
+	
+}
+
+pub struct Dispacher<T>{
+	subscribers : Mutex<Vec<Sender<T>>>
+}
+
+impl<T> Dispacher<T>
+where T : Send + Msg 
+{
+	pub fn new() -> Self {
+		Self{
+			subscribers : Mutex::new(Vec::<Sender<T>>::new())
+		}
+	}
+	
+	pub fn subscribe(&mut self) -> Subscription<T> {
+		let subscribers = self.subscribers.lock().unwrap();
+		
+		let (tx, rx) = chanel::<T>::();
+		subscribers.push(tx);
+		
+		drop(subscribers);
+		
+		Subscription::<T>::new(rx) 
+	}
+	
+	pub fn dispatch(&self, m : T) -> Result< (), Box<dyn error::Error>>
+	{
+		let mut remove = Vec::<usie>::new();
+		
+		for (subscriber, index) in *(self.subscribers.lock().unwrap()).inter() 
+			let message = m.clone();
+			//messaggio inoltrato a tutti gli iscritti al canale
+			match subscriber.send(message) {
+				Ok(_) => { } 
+				Error(e) => {
+					println!("Canale chiuso per Subscription {:?}", index);
+					//rimozione non specificata 
+					remove.push(index);
+				}
+			}
+		}
+		
+		if ( remove.len() > 0 ) {
+			
+			for i in remove {
+				let mut subscribers =  *(self.subscribers.lock().unwrap());
+				subscribers.remove(i);
+			}
+			
+			//drop(subscribers); lo esegue la variazione di scope sintattico, minor tempo di blocco su risorsa
+		}
+		 
+	}
+	
+	
+}
+
+

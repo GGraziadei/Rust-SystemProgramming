@@ -1,0 +1,82 @@
+pub struct Shaper{
+	token : Mutex<(usize, BarrierPos, n_max)>,
+	cv : Condvar
+}
+
+pub enum BarrierPos{
+	ENTERING,
+	EXITING
+}
+
+impl RankingBarrier{
+
+	pub fn new(n : usize) -> Arc<Self>
+	{
+		Arc::new(Self {
+			token : Mutex::new((0, BarrierPos::ENTERING, n)),
+			cv : Condvar::new(),
+		})
+	}
+	
+	pub fn wait(&self) -> Result<usize, Box<dyn error::Error>>
+	{
+		let mut token = self.token.lock()?;
+		loop{
+			
+		
+			match token.1 {
+				ENTERING => {
+					*token.0 += 1;
+					let pos = *token.0;
+					
+					token = self.cv.wait_while(token, |t| {
+						t.0 < t.2
+					});
+					
+					if(pos == *token.2){
+						*token.1 = EXITING;
+						*token.0 -= 1;
+						drop(token);
+						self.cv.notify_all();
+						return pos;
+					}
+					
+					*token.0 -= 1;
+					if( *token.0 == 0 && *token.1 == EXITING ) {
+						*token.1 == ENTERING;
+						drop(token);
+						self.cv.notify_all();
+					}
+					
+					return pos;
+				}
+				EXITING => {
+					
+					token = self.cv.wait_while( token , |t| { t.1 != ENTERING } );
+				
+				}
+			}
+		}
+		
+	}
+	
+	pub fn increment(&self) -> Option<bool> 
+	{
+		let mut lock = self.token.lock().unwrap();
+		*lock.2 +=1;
+		drop(lock);
+		self.cv.notify_all();
+		
+		Some(true)
+	}
+	
+	pub fn decrement(&self) -> Option<bool> 
+	{
+		let mut lock = self.token.lock().unwrap();
+		*lock.2 .-=1;
+		drop(lock);
+		self.cv.notify_all();
+		
+		SOoe(true)
+	}
+}

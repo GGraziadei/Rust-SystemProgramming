@@ -1,0 +1,83 @@
+trait Task{ }
+
+pub struct SingleThreadExecutor<T>{
+	tx : SyncSender<T>,
+	open : Mutex<bool>
+	executor : JoinHandle<usize> 
+}
+
+impl<T> SingleThreadExecutor<T>
+where T : Send + Task 
+{
+	
+	fn thread_executor(rx : Receiver<T>) -> usize 
+	{
+		loop{
+			match rx.recv() {
+				Some(task) => {
+					task();
+				}
+				Err(e) => {
+					//chanel closed
+					return 0; 
+				} 
+			}
+		}
+	}	
+	
+	
+	pub fn new(n : usize ) -> Self {
+		
+		let (tx,rx) = bounded::<T>::(n);
+		
+		let executor : JoinHandle<usize> = std::thread::spawn( move|| {
+			thread_executor(rx);
+		});
+
+		Sel{
+			tx , 
+			open : Mutex::new(true),
+			executor
+		}
+	}
+	
+	pub fn submit(&self, task : T)
+		-> Result< Option<()> , Box<dyn error::Error>>
+	{
+		let status = self.open.lock().ok()?;
+		
+		if(*status == false) {
+			return Ok(None);
+		}
+		self.tx.send(task).ok()?;
+		drop(status); 
+		
+		Ok(Some(()))
+	}
+	
+	pub fn close(&self) -> Result< (), Box<dyn error::Error> 
+	{
+		let status = self.status.lock().ok()?;
+		*status = false;
+		drop(status);
+	}
+	
+}
+
+impl Drop for SingleThreadExecutor<T>
+where T : Send + Work 
+{
+	pub fn drop(&mut self) -> () 
+	{
+		let status = self.status.lock().expect("Error");
+		if(*status != false ) {
+			drop(status);
+			return ();
+		}	
+		
+		drop(self.tx);
+		let res = self.executor.join().expect("Error in executor");
+		println!("Executor thread exited with status {}", res);
+		
+	}
+}

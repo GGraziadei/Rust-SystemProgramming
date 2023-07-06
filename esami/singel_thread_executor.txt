@@ -1,0 +1,57 @@
+pub struct SingleThreadExecutor<T>{
+	tx : SyncSender<T>,
+	p : Vec<JoinHandler<usize>>
+}
+
+//utilizzo crossbeam per la implementazione
+
+impl<T> SingleThreadExecutor<T>
+where T : Send + FnOnce() -> () + 'static
+{
+
+	fn processor(rx : Receiver<T>) -> usize {
+		loop{
+		
+			match rx.recv() {
+				Err(e) => { break; },
+				Ok(f) => f()
+			}
+		
+		}
+		
+		return 0;
+	}
+	
+	pub fn new(n_max : usize, n_threads : usize) -> Arc<Self>{
+		let (tx,rx) = bounded::<T>::(n_max); //generarion canale MPMC
+		let p : Vec<JoinHandler<usize>> = Vec::with_capacity(n_threads);
+		
+		for _ in 0..n_threads{
+			p.push(
+				std::thread::spawn( move || {
+					processor(rx.clone());
+				}));
+		}
+		
+		Arc::new(Self{tx, p})
+	}
+	
+	pub fn submit(&self, f : T) -> Option<()>{
+		let res = self.tx.send(f).ok()?; //bloccante se il canale ha ragigunto la massima portata
+		if( res.is_some()) return Some(());
+		return None;
+	}
+	
+	pub fn shutdown(&self) -> Option<()> {
+	
+		drop(self.tx);
+		
+		for t in self.p.iter() {
+			let res = t.join().ok()?;
+			assert_eq!(0,res);
+		}
+		
+		
+	}
+	
+}

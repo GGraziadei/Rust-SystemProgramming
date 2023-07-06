@@ -1,0 +1,111 @@
+trait Message : Send {}
+
+pub struct Subscription<T>{
+	rx : Receiver<T>
+}
+impl<T> Subscription<T>
+where T : Message + Send
+{
+	pub fn new(rx : Reciver<T>) -> Self {
+		Self { rx }
+	
+	}
+	
+	pub fn read(&self) -> Option<T>{
+		match self.tx.recv() {
+			Ok(msg) => Some(msg),
+			Err(_) => {
+				drop(self.rx);
+				None
+			}
+		}
+	}
+	
+}
+
+impl<T> Drop for Subscription<T>
+where T : Send {
+
+	pub fn srop(&mut self) -> () {
+		drop(self.tx);
+	}
+	
+}
+
+pub struct Dispatcher<T>{
+	s : Mutex<Vec<Sender<T>>>,
+	cv : Condvar,
+	max_n : usize
+}
+
+impl<T> Dispatcher<T>
+where T : Send + Message{
+	
+	pub fn new(n : usize) -> Arc<Self>
+	{
+		Arc::new(Self{
+			s : Mutex::new( Vec::with_capacity(n) ),
+			cv : Condvar::new(),
+			max_n : usize
+		})
+	}
+	
+	pub fn send(&self, msg : T) -> Option<T>
+	{
+		
+		let mut s = self.s.lock().ok()?;
+		let mut r = Vec::<usize>::with_capacity(self.max_n);
+		
+		for (ss,id) in s.iter().enumerate() {
+			match ss.send(msg).ok() {
+				Ok(_) => {} 
+				Err( e : RecvError<T> ) => {
+					//Canale chiuso 
+					r.push(id);
+				}
+			}
+		}
+		
+		let wake_up = r.len();
+		
+		if (wake_up > 0 ) {
+			for rr in r.into_iter() {
+				s.remove(rr); //si sono creati nuovi posti per ricettori di notifiche
+			}
+		}
+		
+		drop(s);
+		
+		for _ in 0..wake_up {
+			self.cv.notify_one(); //svegli il thread in attesa in testa alla coda
+		}
+		
+		Some(())
+	}
+	
+	pub fn subscribe(&self) -> Option<Subscription<T>>{
+		
+		let mut s = self.s.lock().ok()?;
+		
+		s = self.cv.wait_while( s, |s| {s.len() >= self.n_max });
+		let (rx, tx) = channel::<T>();
+		let sub = Subscription::<T>::new(rx);
+		s.push(tx);
+		drop(s);
+		
+		Some(sub)
+	}
+	
+}
+
+impl<T> Drop for Dispatcher<T>{
+	
+	pub fn drop(&mut self) -> () {
+		let mut s = self.s.lock().expect("Error);
+		
+		for ss in s.into_iter() {
+			drop(ss);
+		}
+	}
+
+}
